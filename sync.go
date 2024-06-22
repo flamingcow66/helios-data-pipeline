@@ -17,8 +17,8 @@ type Directory struct {
 }
 
 type Person struct {
-	Name  string
 	Email string
+	Name  string
 }
 
 type Student struct {
@@ -49,6 +49,43 @@ func main() {
 	}
 
 	l.Info("loaded directory", "directory", dir)
+
+	at, err := NewAirtableFromEnv()
+	if err != nil {
+		fatal(l, "failed to create airtable client", "error", err)
+	}
+
+	dirBaseID, err := at.GetBaseID("Directory")
+	if err != nil {
+		fatal(l, "failed to find Directory base in Airtable", "error", err)
+	}
+
+	parentsTable, err := at.GetTable(dirBaseID, "Parents")
+	if err != nil {
+		fatal(l, "failed to get Parents table", "error", err)
+	}
+
+	remoteParentsRecords, err := parentsTable.
+		GetRecords().
+		FromView("Primary").
+		ReturnFields("Email", "Name").
+		Do()
+	if err != nil {
+		fatal(l, "failed to fetch Parents", "error", err)
+	}
+
+	l.Info("tmp", "parents", remoteParentsRecords)
+
+	localParentRecords := dir.GetParentRecords()
+
+	for _, record := range localParentRecords {
+		_, err = parentsTable.AddRecords(&AirtableRecords{
+			Records: []*AirtableRecord{record},
+		})
+		if err != nil {
+			fatal(l, "failed to add Parents", "error", err)
+		}
+	}
 }
 
 func loadDirectory(l *slog.Logger, path string) (*Directory, error) {
@@ -136,7 +173,7 @@ func loadDirectory(l *slog.Logger, path string) (*Directory, error) {
 		parents := []*Parent{}
 
 		parent1 := d.AddParent(
-			row[iParent1Email],
+			strings.ToLower(row[iParent1Email]),
 			fmt.Sprintf("%s %s", row[iParent1FirstName], row[iParent1LastName]),
 		)
 
@@ -144,7 +181,7 @@ func loadDirectory(l *slog.Logger, path string) (*Directory, error) {
 
 		if row[iParent2Email] != "" {
 			parent2 := d.AddParent(
-				row[iParent2Email],
+				strings.ToLower(row[iParent2Email]),
 				fmt.Sprintf("%s %s", row[iParent2FirstName], row[iParent2LastName]),
 			)
 
@@ -182,8 +219,8 @@ func (d *Directory) AddParent(email, name string) *Parent {
 
 	p = &Parent{
 		Person: Person{
-			Name:  name,
 			Email: email,
+			Name:  name,
 		},
 	}
 
@@ -195,8 +232,8 @@ func (d *Directory) AddParent(email, name string) *Parent {
 func (d *Directory) AddStudent(email, name, class, grade string, parents []*Parent) *Student {
 	s := &Student{
 		Person: Person{
-			Name:  name,
 			Email: email,
+			Name:  name,
 		},
 		Class:   class,
 		Grade:   grade,
@@ -206,6 +243,21 @@ func (d *Directory) AddStudent(email, name, class, grade string, parents []*Pare
 	d.Students[email] = s
 
 	return s
+}
+
+func (d *Directory) GetParentRecords() []*AirtableRecord {
+	records := []*AirtableRecord{}
+
+	for _, parent := range d.Parents {
+		records = append(records, &AirtableRecord{
+			Fields: map[string]any{
+				"Email": parent.Email,
+				"Name":  parent.Name,
+			},
+		})
+	}
+
+	return records
 }
 
 func (p Person) String() string {
