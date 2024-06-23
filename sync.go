@@ -68,25 +68,12 @@ func main() {
 		fatal(l, "failed to get Parents table", "error", err)
 	}
 
-	remoteParentsRecords, err := parentsTable.ListRecords(context.Background(), nil)
+	parents, err := parentsTable.ReplaceRecords(context.Background(), dir.GetParentRecords(), []string{"Email"})
 	if err != nil {
-		fatal(l, "failed to fetch Parents", "error", err)
+		fatal(l, "failed to upsert Parents", "error", err)
 	}
 
-	l.Info("tmp", "parents", remoteParentsRecords, "len", len(remoteParentsRecords))
-
-	/*
-		localParentRecords := dir.GetParentRecords()
-
-		for _, record := range localParentRecords {
-			_, err = parentsTable.AddRecords(&AirtableRecords{
-				Records: []*AirtableRecord{record},
-			})
-			if err != nil {
-				fatal(l, "failed to add Parents", "error", err)
-			}
-		}
-	*/
+	l.Info("upserted parents", "parents", parents)
 }
 
 func loadDirectory(l *slog.Logger, path string) (*Directory, error) {
@@ -246,12 +233,11 @@ func (d *Directory) AddStudent(email, name, class, grade string, parents []*Pare
 	return s
 }
 
-/*
-func (d *Directory) GetParentRecords() []*AirtableRecord {
-	records := []*AirtableRecord{}
+func (d *Directory) GetParentRecords() []*airtable.Record {
+	records := []*airtable.Record{}
 
 	for _, parent := range d.Parents {
-		records = append(records, &AirtableRecord{
+		records = append(records, &airtable.Record{
 			Fields: map[string]any{
 				"Email": parent.Email,
 				"Name":  parent.Name,
@@ -261,7 +247,6 @@ func (d *Directory) GetParentRecords() []*AirtableRecord {
 
 	return records
 }
-*/
 
 func (p Person) String() string {
 	return fmt.Sprintf(
