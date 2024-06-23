@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/flamingcow66/airtable"
 )
 
 type Directory struct {
@@ -50,42 +53,40 @@ func main() {
 
 	l.Info("loaded directory", "directory", dir)
 
-	at, err := NewAirtableFromEnv()
+	at, err := airtable.NewFromEnv()
 	if err != nil {
 		fatal(l, "failed to create airtable client", "error", err)
 	}
 
-	dirBaseID, err := at.GetBaseID("Directory")
+	dirBase, err := at.GetBaseByName(context.Background(), "Directory")
 	if err != nil {
 		fatal(l, "failed to find Directory base in Airtable", "error", err)
 	}
 
-	parentsTable, err := at.GetTable(dirBaseID, "Parents")
+	parentsTable, err := dirBase.GetTableByName(context.Background(), "Parents")
 	if err != nil {
 		fatal(l, "failed to get Parents table", "error", err)
 	}
 
-	remoteParentsRecords, err := parentsTable.
-		GetRecords().
-		FromView("Primary").
-		ReturnFields("Email", "Name").
-		Do()
+	remoteParentsRecords, err := parentsTable.ListRecords(context.Background(), nil)
 	if err != nil {
 		fatal(l, "failed to fetch Parents", "error", err)
 	}
 
-	l.Info("tmp", "parents", remoteParentsRecords)
+	l.Info("tmp", "parents", remoteParentsRecords, "len", len(remoteParentsRecords))
 
-	localParentRecords := dir.GetParentRecords()
+	/*
+		localParentRecords := dir.GetParentRecords()
 
-	for _, record := range localParentRecords {
-		_, err = parentsTable.AddRecords(&AirtableRecords{
-			Records: []*AirtableRecord{record},
-		})
-		if err != nil {
-			fatal(l, "failed to add Parents", "error", err)
+		for _, record := range localParentRecords {
+			_, err = parentsTable.AddRecords(&AirtableRecords{
+				Records: []*AirtableRecord{record},
+			})
+			if err != nil {
+				fatal(l, "failed to add Parents", "error", err)
+			}
 		}
-	}
+	*/
 }
 
 func loadDirectory(l *slog.Logger, path string) (*Directory, error) {
@@ -245,6 +246,7 @@ func (d *Directory) AddStudent(email, name, class, grade string, parents []*Pare
 	return s
 }
 
+/*
 func (d *Directory) GetParentRecords() []*AirtableRecord {
 	records := []*AirtableRecord{}
 
@@ -259,6 +261,7 @@ func (d *Directory) GetParentRecords() []*AirtableRecord {
 
 	return records
 }
+*/
 
 func (p Person) String() string {
 	return fmt.Sprintf(
